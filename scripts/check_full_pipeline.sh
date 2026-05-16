@@ -73,7 +73,7 @@ PY
 
 echo "[5/9] Checking wake-word logic"
 set +u
-source /opt/ros/jazzy/setup.bash
+source "${ROS_SETUP:-/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash}"
 set -u
 "${QWEN_PYTHON}" - <<'PY'
 from qwen_ros_node_edg_tts import QwenAudioNode

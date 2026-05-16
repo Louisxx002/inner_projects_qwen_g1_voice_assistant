@@ -266,11 +266,12 @@ class QwenAudioNode(Node):
         env = os.environ.copy()
         env["NO_PROXY"] = "127.0.0.1,localhost," + env.get("NO_PROXY", "")
         env["no_proxy"] = "127.0.0.1,localhost," + env.get("no_proxy", "")
-        sdk_root = CONFIG.action_runner.parent.parent.parent
-        unitree_lib_dir = sdk_root / "thirdparty" / "lib" / os.uname().machine
-        if unitree_lib_dir.is_dir():
-            existing = env.get("LD_LIBRARY_PATH", "")
-            env["LD_LIBRARY_PATH"] = str(unitree_lib_dir) + (f":{existing}" if existing else "")
+        if CONFIG.action_runner.exists():
+            sdk_root = CONFIG.action_runner.parent.parent.parent
+            unitree_lib_dir = sdk_root / "thirdparty" / "lib" / os.uname().machine
+            if unitree_lib_dir.is_dir():
+                existing = env.get("LD_LIBRARY_PATH", "")
+                env["LD_LIBRARY_PATH"] = str(unitree_lib_dir) + (f":{existing}" if existing else "")
         return env
 
     def release_arm(self):

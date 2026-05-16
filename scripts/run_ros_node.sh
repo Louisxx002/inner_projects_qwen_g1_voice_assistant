@@ -14,7 +14,7 @@ export NO_PROXY="127.0.0.1,localhost,${NO_PROXY:-}"
 export no_proxy="127.0.0.1,localhost,${no_proxy:-}"
 mkdir -p "${QWEN_RUNTIME_DIR}" "${ROS_LOG_DIR}"
 set +u
-source /opt/ros/jazzy/setup.bash
+source "${ROS_SETUP:-/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash}"
 set -u
 
 BRIDGE_PID_FILE="${QWEN_RUNTIME_DIR}/asr_bridge.pid"

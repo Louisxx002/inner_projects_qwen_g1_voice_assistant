@@ -9,7 +9,7 @@ source "${PROJECT_ROOT}/config/default.env"
 set +a
 
 set +u
-source /opt/ros/jazzy/setup.bash
+source "${ROS_SETUP:-/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash}"
 set -u
 
 export PYTHONPATH="${PROJECT_ROOT}/third_party/unitree_sdk2_python:${PYTHONPATH:-}"

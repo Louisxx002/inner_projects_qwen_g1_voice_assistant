@@ -6,6 +6,8 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "Qwen3.5-0.8B" / "model"
+DEFAULT_ACTION_ROOT = PROJECT_ROOT / "external" / "unitree_g1_action_classifier_package"
 
 
 def _env(name: str, default: str) -> str:
@@ -51,7 +53,7 @@ class ProjectConfig:
     wake_words: tuple[str, ...] = _env_list("QWEN_WAKE_WORDS", ("西浦小g", "小g", "小G"))
     always_listen: bool = _env_bool("QWEN_ALWAYS_LISTEN", False)
 
-    model_path: str = _env("QWEN_MODEL_PATH", "/home/louisxx/Qwen3.5-0.8B/model")
+    model_path: str = _env("QWEN_MODEL_PATH", str(DEFAULT_MODEL_PATH))
     server_host: str = _env("QWEN_SERVER_HOST", "0.0.0.0")
     server_port: int = _env_int("QWEN_SERVER_PORT", 8000)
     max_new_tokens: int = _env_int("QWEN_MAX_NEW_TOKENS", 50)
@@ -61,25 +63,25 @@ class ProjectConfig:
     unitree_network_interface: str = _env("UNITREE_NETWORK_INTERFACE", "enp8s0")
     unitree_audio_volume: int = _env_int("UNITREE_AUDIO_VOLUME", 85)
 
-    action_enable: bool = _env_bool("QWEN_ACTION_ENABLE", True)
-    action_execute: bool = _env_bool("QWEN_ACTION_EXECUTE", True)
+    action_enable: bool = _env_bool("QWEN_ACTION_ENABLE", False)
+    action_execute: bool = _env_bool("QWEN_ACTION_EXECUTE", False)
     action_backend: str = _env("QWEN_ACTION_BACKEND", "qwen")
     action_threshold: float = _env_float("QWEN_ACTION_THRESHOLD", 0.8)
     action_auto_release: bool = _env_bool("QWEN_ACTION_AUTO_RELEASE", False)
     action_python: str = _env(
         "QWEN_ACTION_PYTHON",
-        "/home/louisxx/unitree_g1_action_classifier_package/.venv/bin/python",
+        str(DEFAULT_ACTION_ROOT / ".venv" / "bin" / "python"),
     )
     action_script: Path = Path(
         _env(
             "QWEN_ACTION_SCRIPT",
-            "/home/louisxx/unitree_g1_action_classifier_package/arm_action_classifier/arm_action_classifier.py",
+            str(DEFAULT_ACTION_ROOT / "arm_action_classifier" / "arm_action_classifier.py"),
         )
     )
     action_runner: Path = Path(
         _env(
             "QWEN_ACTION_RUNNER",
-            "/home/louisxx/unitree_g1_action_classifier_package/unitree_sdk2/build/bin/g1_arm_action_example",
+            str(DEFAULT_ACTION_ROOT / "unitree_sdk2" / "build" / "bin" / "g1_arm_action_example"),
         )
     )
 
