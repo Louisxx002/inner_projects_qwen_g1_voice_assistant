@@ -63,8 +63,8 @@ class ProjectConfig:
     unitree_network_interface: str = _env("UNITREE_NETWORK_INTERFACE", "enp8s0")
     unitree_audio_volume: int = _env_int("UNITREE_AUDIO_VOLUME", 85)
 
-    action_enable: bool = _env_bool("QWEN_ACTION_ENABLE", False)
-    action_execute: bool = _env_bool("QWEN_ACTION_EXECUTE", False)
+    action_enable: bool = _env_bool("QWEN_ACTION_ENABLE", True)
+    action_execute: bool = _env_bool("QWEN_ACTION_EXECUTE", True)
     action_backend: str = _env("QWEN_ACTION_BACKEND", "qwen")
     action_threshold: float = _env_float("QWEN_ACTION_THRESHOLD", 0.8)
     action_auto_release: bool = _env_bool("QWEN_ACTION_AUTO_RELEASE", False)

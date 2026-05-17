@@ -1,6 +1,6 @@
 # inner_projects_qwen_g1_voice_assistant
 
-这是一个面向 Unitree G1 的语音交互工作空间。它把 ROS2 ASR 文本接入本地 Qwen 模型，生成回复后用 Edge TTS 合成语音，再通过 Unitree 音频接口播放。
+这是一个面向 Unitree G1 的语音交互工作空间。它把 Unitree DDS ASR 文本桥接到 ROS2，接入本地 Qwen 模型生成回复，用 Edge TTS 合成语音，通过 Unitree 音频接口播放，并可按回复内容触发可选的 G1 手臂动作。
 
 ## 现在能做什么
 
@@ -18,16 +18,19 @@ Edge TTS 生成 runtime/tts.mp3
 ROS 节点转换成 runtime/tts.wav
         ↓
 Unitree G1 扬声器播放
+        ↓
+可选：把回复文本送入动作分类器并执行 G1 手臂动作
 ```
 
 核心能力：
 
 - 支持中文、英文、日文简单语言检测。
-- 支持默认唤醒词：`西浦小g`、`小g`、`小G`、`hey gee`、`hey g`、`XJTLU Gee`、`せいほくジーくん`、`ジーくん`。
+- 支持默认唤醒词：`西浦小g`、`小g`、`小G`、`小纪`、`小记`、`小机`、`小鸡`、`hey gee`、`hey g`、`XJTLU Gee`、`せいほくジーくん`、`ジーくん`。
 - 支持只说唤醒词后，下一句话作为命令。
 - 支持键盘切换唤醒词模式和持续监听模式。
 - 支持把 Unitree 官方 DDS `rt/audio_msg` 安全转发到 ROS2 `/audio_msg`。
-- 支持集中配置模型路径、ROS topic、网口、音量、生成参数。
+- 支持把 Qwen 回复送入 `external/unitree_g1_action_classifier_package`，分类并可选执行 G1 手臂动作。
+- 支持集中配置模型路径、ROS topic、网口、音量、生成参数和动作桥参数。
 - 运行产物统一写入 `runtime/`，不污染项目根目录。
 
 ## 目录结构
@@ -39,6 +42,8 @@ inner_projects_qwen_g1_voice_assistant/
 ├── scripts/
 │   ├── check_project.sh
 │   ├── check_full_pipeline.sh
+│   ├── monitor_audio_msg.sh
+│   ├── monitor_ros_logs.sh
 │   ├── run_asr_bridge.sh
 │   ├── run_full_pipeline.sh
 │   ├── run_audio_player.sh
@@ -47,8 +52,11 @@ inner_projects_qwen_g1_voice_assistant/
 │   └── run_server.sh
 ├── third_party/
 │   └── unitree_sdk2_python/
+├── external/
+│   └── unitree_g1_action_classifier_package/
 ├── runtime/
 ├── project_config.py
+├── asr_dds_to_ros_bridge.py
 ├── qwen_server.py
 ├── qwen_ros_node_edg_tts.py
 ├── unitree_audio_player.py
@@ -71,6 +79,7 @@ inner_projects_qwen_g1_voice_assistant/
   - 做唤醒词过滤。
   - 请求 Qwen 服务。
   - 把 `runtime/tts.mp3` 转成 `runtime/tts.wav`。
+  - 可选调用动作分类器和 G1 动作 runner。
 
 - `asr_dds_to_ros_bridge.py`
   - 安全桥接节点。
@@ -99,25 +108,35 @@ inner_projects_qwen_g1_voice_assistant/
 常用配置在：
 
 ```bash
-/home/louisxx/qwen_ros_node_edg_tts/config/default.env
+config/default.env
 ```
 
 重要配置：
 
 ```bash
 QWEN_AUDIO_TOPIC=/audio_msg
-QWEN_PYTHON=/home/louisxx/miniconda3/envs/qwen/bin/python
+QWEN_PYTHON=${HOME}/miniconda3/envs/qwen/bin/python
 QWEN_SERVER_URL=http://127.0.0.1:8000/infer
-QWEN_WAKE_WORDS="西浦小g,小g,小G,hey gee,hey g,XJTLU Gee,せいほくジーくん,ジーくん"
+QWEN_REQUEST_TIMEOUT_SEC=15
+QWEN_WAKE_WORDS="西浦小g,小g,小G,小纪,小记,小机,小鸡,hey gee,hey g,XJTLU Gee,せいほくジーくん,ジーくん"
+QWEN_ALWAYS_LISTEN=0
 
-QWEN_MODEL_PATH=/home/louisxx/Qwen3.5-0.8B/model
-QWEN_RUNTIME_DIR=/home/louisxx/qwen_ros_node_edg_tts/runtime
+QWEN_MODEL_PATH=models/Qwen3.5-0.8B/model
+QWEN_RUNTIME_DIR=runtime
+QWEN_SERVER_HOST=0.0.0.0
+QWEN_SERVER_PORT=8000
 QWEN_MAX_NEW_TOKENS=50
 QWEN_TEMPERATURE=0.7
 
 UNITREE_DOMAIN_ID=0
 UNITREE_NETWORK_INTERFACE=enp8s0
 UNITREE_AUDIO_VOLUME=85
+
+QWEN_ACTION_ENABLE=1
+QWEN_ACTION_EXECUTE=1
+QWEN_ACTION_BACKEND=qwen
+QWEN_ACTION_THRESHOLD=0.8
+QWEN_ACTION_AUTO_RELEASE=0
 ```
 
 ## 环境准备
@@ -125,7 +144,7 @@ UNITREE_AUDIO_VOLUME=85
 Python 依赖：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 conda activate qwen
 pip install -r requirements.txt
 ```
@@ -146,7 +165,7 @@ source /opt/ros/jazzy/setup.bash
 Unitree SDK2：
 
 ```bash
-export PYTHONPATH=/home/louisxx/qwen_ros_node_edg_tts/third_party/unitree_sdk2_python:$PYTHONPATH
+export PYTHONPATH=/home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant/third_party/unitree_sdk2_python:$PYTHONPATH
 ```
 
 启动脚本里已经处理了 ROS2 source 和 Unitree SDK2 `PYTHONPATH`。
@@ -158,29 +177,31 @@ export PYTHONPATH=/home/louisxx/qwen_ros_node_edg_tts/third_party/unitree_sdk2_p
 持续监听模式：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/run_full_pipeline.sh --mode listen
 ```
 
 唤醒词模式：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/run_full_pipeline.sh --mode wake --wake-word "小g"
 ```
 
 这条脚本会同时拉起：
 
 - Qwen server
-- ROS 文本节点
+- ROS 文本节点，并默认自动启动 DDS ASR bridge
 - Unitree 音频播放器
+
+它使用 `systemd-run --user` 启动用户服务，服务名分别是 `qwen-server.service`、`qwen-ros-node.service` 和 `qwen-audio-player.service`。ASR bridge 由 ROS 文本节点脚本自动以后台进程启动。
 
 ### 手动分开启动
 
 如果你要排查某一段，也可以分开跑：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/run_server.sh
 ./scripts/run_ros_node.sh
 ./scripts/run_audio_player.sh
@@ -190,7 +211,7 @@ cd /home/louisxx/qwen_ros_node_edg_tts
 
 ```text
 终端 1: run_server.sh
-终端 2: run_ros_node.sh
+终端 2: run_ros_node.sh，会自动启动 asr_dds_to_ros_bridge.py
 终端 3: run_audio_player.sh
 ```
 
@@ -211,21 +232,21 @@ env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u al
 如果要看桥接有没有收到机器人语音：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/monitor_audio_msg.sh
 ```
 
 桥接脚本仍然保留，单独排查时可以直接运行：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/run_asr_bridge.sh
 ```
 
 停止全流程：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/stop_full_pipeline.sh
 ```
 
@@ -237,6 +258,10 @@ cd /home/louisxx/qwen_ros_node_edg_tts
 西浦小g
 小g
 小G
+小纪
+小记
+小机
+小鸡
 hey gee
 hey g
 XJTLU Gee
@@ -276,14 +301,24 @@ quit   退出节点
 不启动模型、不连接机器人，只做基础检查：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/check_project.sh
+```
+
+快速检查会检查：
+
+```text
+1. Python 语法
+2. 配置是否可读取
+3. 模型路径是否存在
+4. 唤醒词配置
+5. runtime 路径
 ```
 
 全面检查：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/check_full_pipeline.sh
 ```
 
@@ -309,15 +344,7 @@ QWEN ROS DDS FULL CHECK PASSED
 
 说明 ROS2 文本传输、唤醒词、TTS 文件转换和 DDS Python 依赖检查都通过。
 
-它会检查：
-
-```text
-Python 语法
-配置是否可读取
-模型路径是否存在
-唤醒词配置
-runtime 路径
-```
+如果全面检查停在 `Found __pycache__ directories` 或 `Found Python bytecode files`，说明项目里残留了 Python 运行缓存。它们已经在 `.gitignore` 中排除，不影响运行，但 `check_full_pipeline.sh` 会把它们当成打包卫生问题并失败；清理 `__pycache__`、`*.pyc`、`*.pyo` 后再跑即可。
 
 ## ROS2 输入格式
 
@@ -376,19 +403,25 @@ G1 不播放：
 
 ## 回复动作桥接
 
-ROS 节点现在会在拿到 Qwen 回复并生成 `runtime/tts.wav` 后，把回复文本送入：
+开启动作桥后，ROS 节点会在拿到 Qwen 回复并生成 `runtime/tts.wav` 后，把回复文本送入：
 
 ```text
-/home/louisxx/unitree_g1_action_classifier_package/arm_action_classifier/arm_action_classifier.py
+external/unitree_g1_action_classifier_package/arm_action_classifier/arm_action_classifier.py
 ```
 
-默认配置会使用通义千问分类动作，并通过官方 runner 执行动作：
+默认配置会启用动作桥并执行分类出的 G1 动作：
 
 ```bash
 QWEN_ACTION_ENABLE=1
-QWEN_ACTION_EXECUTE=1
 QWEN_ACTION_BACKEND=qwen
+QWEN_ACTION_EXECUTE=1
 UNITREE_NETWORK_INTERFACE=enp8s0
+```
+
+如果只想先 dry-run，不控制真机：
+
+```bash
+QWEN_ACTION_EXECUTE=0 ./scripts/run_ros_node.sh
 ```
 
 运行前需要在同一个终端环境里设置真实百炼 API key：
@@ -400,7 +433,7 @@ export DASHSCOPE_API_KEY='sk-你的真实key'
 三进程启动顺序：
 
 ```bash
-cd /home/louisxx/qwen_ros_node_edg_tts
+cd /home/louisxx/inner_project_repos/inner_projects_qwen_g1_voice_assistant
 ./scripts/run_server.sh
 ./scripts/run_ros_node.sh
 ./scripts/run_audio_player.sh
@@ -413,18 +446,18 @@ source /opt/ros/jazzy/setup.bash
 ros2 topic pub --once /audio_msg std_msgs/msg/String "{data: '{\"text\":\"小g 西交利物浦大学非常棒\"}'}"
 ```
 
-如果只想先 dry-run，不控制真机：
+如果机器人返回 `arm_holding_release_required`，可以先手动释放手臂：
 
 ```bash
-QWEN_ACTION_EXECUTE=0 ./scripts/run_ros_node.sh
-```
-
-如果机器人返回 `arm_holding_release_required`，先手动释放手臂：
-
-```bash
-/home/louisxx/unitree_g1_action_classifier_package/unitree_sdk2/build/bin/g1_arm_action_example \
+external/unitree_g1_action_classifier_package/unitree_sdk2/build/bin/g1_arm_action_example \
   --network enp8s0 \
   --id 99
+```
+
+也可以打开自动释放重试：
+
+```bash
+QWEN_ACTION_AUTO_RELEASE=1 ./scripts/run_ros_node.sh
 ```
 
 嘈杂环境误触发：
